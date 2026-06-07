@@ -1,0 +1,6 @@
+# Dependencies for DecoderOnlyLinuxGPT.py
+# Install with:  pip install -r requirements.txt
+#
+# torch is the only third-party package this project uses.
+# (typing is part of the Python standard library.)
+torch>=2.1
