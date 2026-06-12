@@ -4,3 +4,6 @@
 # (typing is part of the Python standard library.)
 torch>=2.1
 numpy
+tiktoken        # GPT-2 byte-level BPE tokenizer
+datasets        # downloading/streaming FineWeb-Edu (prepare_data.py)
+tqdm            # progress bars during data prep
