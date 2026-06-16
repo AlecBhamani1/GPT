@@ -1,9 +1,12 @@
-# Dependencies for DecoderOnlyLinuxGPT.py
 # Install with:  pip install -r requirements.txt
-#
-# (typing is part of the Python standard library.)
+
+# --- core (needed for train / finetune / chat / eval / export) ---
 torch>=2.1
 numpy
 tiktoken        # GPT-2 byte-level BPE tokenizer
-datasets        # downloading/streaming FineWeb-Edu (prepare_data.py)
-tqdm            # progress bars during data prep
+
+# --- only for the big FineWeb-Edu download path in prepare_data.py ---
+# The quick local path (`python prepare_data.py --file mydata.txt`) does NOT
+# need these — skip them if you're training on your own text file.
+datasets        # streaming/caching FineWeb-Edu
+tqdm            # progress bars during the large data prep
