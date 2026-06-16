@@ -1,16 +1,20 @@
-#prepare_data.py — download a general web-text dataset, tokenize it with the
-#GPT-2 BPE (tiktoken), and write train.bin / val.bin that the trainer memory-maps.
+#prepare_data.py — tokenize text with the GPT-2 BPE (tiktoken) and write
+#train.bin / val.bin that the trainer memory-maps.
 #
-#Run ONCE on the Spark before training:
-#    python prepare_data.py
+#Two modes:
+#  1. Big web-text pretraining (default): streams FineWeb-Edu from HuggingFace.
+#         python prepare_data.py
+#  2. A LOCAL text file (great for quick/easy training on your own data):
+#         python prepare_data.py --file mydata.txt
+#     No download, no `datasets` dependency — just point it at a .txt.
 #
-#This mirrors nanoGPT's data prep. The 10BT sample is ~10B tokens (tens of GB on
-#disk once tokenized) — make sure you have the space. Tokenization is CPU-bound
-#and parallelized across NUM_PROC workers (the Spark has 20 CPU cores).
+#The 10BT sample is ~10B tokens (tens of GB once tokenized) — make sure you have
+#the space. Tokenization is CPU-bound and parallelized across NUM_PROC workers.
 import os
+import sys
+import argparse
 import numpy as np
 import tiktoken
-from datasets import load_dataset      #pip install datasets
 from tqdm import tqdm
 
 # ----------------------- config -----------------------
@@ -23,6 +27,20 @@ SEED           = 2357
 enc = tiktoken.get_encoding("gpt2")
 
 
+def prepare_local_file(path, val_fraction=0.01):
+    """Tokenize one local text file into train.bin / val.bin. Lightweight path
+    for training on your own corpus without downloading a big dataset."""
+    with open(path, encoding='utf-8', errors='ignore') as f:
+        text = f.read()
+    ids = np.array(enc.encode_ordinary(text) + [enc.eot_token], dtype=np.uint16)
+    n_val = max(1, int(len(ids) * val_fraction))
+    splits = {'train': ids[:-n_val], 'val': ids[-n_val:]}
+    for name, arr in splits.items():
+        arr.tofile(f"{name}.bin")
+        print(f"wrote {name}.bin: {len(arr):,} tokens")
+    print("done. now train:  python train.py   (try GPT_CONFIG=tiny first)")
+
+
 def process(example):
     ids = enc.encode_ordinary(example["text"])   #BPE token ids (ignores special tokens)
     ids.append(enc.eot_token)                     #<|endoftext|> marks doc boundaries
@@ -30,6 +48,16 @@ def process(example):
 
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--file", help="tokenize this local .txt instead of FineWeb-Edu")
+    args = ap.parse_args()
+
+    if args.file:
+        prepare_local_file(args.file)
+        sys.exit(0)
+
+    from datasets import load_dataset   #only needed for the big-download path
+
     #load the dataset (downloads + caches under ~/.cache/huggingface)
     ds = load_dataset(DATASET, name=DATASET_CONFIG, split="train", num_proc=NUM_PROC)
 
@@ -61,4 +89,4 @@ if __name__ == "__main__":
         arr.flush()
         print(f"wrote {filename}: {arr_len:,} tokens")
 
-    print("done. now train:  python DecoderOnlyLinuxGPT.py")
+    print("done. now train:  python train.py")

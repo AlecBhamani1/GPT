@@ -1,0 +1,13 @@
+# trained weights & tokenized data (large, regenerable)
+*.pt
+*.bin
+*.gguf
+train.log
+
+# HF/Ollama export output
+hf_export/
+
+# python
+__pycache__/
+*.pyc
+.venv/
