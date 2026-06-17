@@ -120,10 +120,24 @@ if __name__ == '__main__':
     start_iter = 0
     if resume and os.path.exists(out_path):
         ckpt = torch.load(out_path, map_location=device, weights_only=False)
-        raw_model.load_state_dict(ckpt['model_state'])
-        if 'optimizer_state' in ckpt:
-            optimizer.load_state_dict(ckpt['optimizer_state'])
+        raw_model.load_state_dict(ckpt['model_state'])   # weights match by name
         start_iter = ckpt.get('iter', 0)
+        if 'optimizer_state' in ckpt:
+            # Optimizer state is keyed by parameter POSITION, so a checkpoint from a
+            # model whose parameter order differs (e.g. the pre-refactor layout)
+            # silently loads here and then explodes inside step() on a shape clash.
+            # Load it, then verify every buffer matches its param; if not, drop it
+            # and keep training from the loaded weights with a fresh optimizer.
+            optimizer.load_state_dict(ckpt['optimizer_state'])
+            mismatch = any(
+                'exp_avg' in optimizer.state.get(p, {})
+                and optimizer.state[p]['exp_avg'].shape != p.shape
+                for grp in optimizer.param_groups for p in grp['params']
+            )
+            if mismatch:
+                optimizer = raw_model.configure_optimizers(weight_decay, learning_rate, betas)
+                print("note: optimizer state from an older checkpoint layout was "
+                      "incompatible -- kept the weights, reset the optimizer.")
         print(f"resumed from step {start_iter}")
 
     print(f"config={CONFIG_NAME} | {raw_model.num_params()/1e6:.1f}M params | "
