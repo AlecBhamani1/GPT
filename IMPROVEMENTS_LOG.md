@@ -205,6 +205,20 @@ over value. **Treating the core task as complete; will keep the loop light.**
 
 ---
 
+## Fix — resume across the refactor (optimizer-state layout)
+
+Reported on the CUDA box: resuming a pre-refactor `gpt_model.pt` (step 3000) crashed
+in `optimizer.step()` with `tensor a (3072) must match tensor b (768)`. Cause: the
+old `Block` registered submodules in a different order, so the optimizer state
+(keyed by parameter *position*) paired Adam buffers with the wrong params. Model
+*weights* were fine (matched by name). Fix in `train.py`: after loading optimizer
+state, verify each `exp_avg` shape matches its parameter; on any mismatch, keep the
+loaded weights and `start_iter` but reset the optimizer (re-warms quickly). Validated
+with a toy 2-param optimizer (detector flags the 3072-vs-768 corruption, passes a
+correct state). No model trained/run on the dev machine.
+
+---
+
 ## Loop concluded (after iteration 5)
 
 The stopping criterion is effectively met. All stated goals are delivered and every
