@@ -22,7 +22,7 @@ from dataclasses import replace
 import numpy as np
 import torch
 
-from model import GPT, GPTConfig, pick_device, pick_dtype, amp_ctx
+from model import GPT, GPTConfig, pick_device, pick_dtype, amp_ctx, load_checkpoint
 from chat_format import encode_example
 
 
@@ -112,7 +112,7 @@ def main():
 
     # Load the base, then rebuild with fine-tuning dropout (dropout has no params,
     # so the pretrained state_dict still loads cleanly).
-    ckpt = torch.load(args.base, map_location=device, weights_only=False)
+    ckpt = load_checkpoint(args.base, map_location=device)
     cfg = replace(GPTConfig(**ckpt['config']), dropout=args.dropout)
     model = GPT(cfg)
     model.load_state_dict(ckpt['model_state'])

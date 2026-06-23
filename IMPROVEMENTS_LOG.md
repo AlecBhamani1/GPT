@@ -219,6 +219,25 @@ correct state). No model trained/run on the dev machine.
 
 ---
 
+## Fix — atomic checkpoint saves (corruption / mid-write reads)
+
+Reported on the CUDA box: `finetune_chat.py` died with `EOFError: Ran out of input`
+loading `gpt_model.pt`. Cause: `torch.save` writes in place (truncates to 0, then
+streams), so an interrupted save — or reading the file while training is still
+writing it (e.g. a backgrounded `train.py`) — yields an empty/truncated checkpoint.
+Fixes:
+- `GPT.save()` now writes to `<path>.tmp` then `os.replace()` (atomic) — readers and
+  interrupts only ever see a complete file, and the prior good checkpoint survives a
+  crash mid-save.
+- New `load_checkpoint()` raises a clear, actionable message for empty/corrupt files
+  instead of a raw `EOFError`; all loaders (`train`, `finetune_chat`, `chat`, `eval`,
+  `export_hf`) route through it.
+
+Validated statically (empty/corrupt/valid files + the tmp→replace pattern); no model
+trained/run on the dev machine.
+
+---
+
 ## Loop concluded (after iteration 5)
 
 The stopping criterion is effectively met. All stated goals are delivered and every

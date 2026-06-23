@@ -7,6 +7,8 @@ chatbot needs: a KV cache for fast incremental decoding, plus top-k / top-p /
 repetition-penalty sampling and an EOS stop condition.
 """
 import math
+import os
+import _pickle
 from contextlib import nullcontext
 from dataclasses import dataclass, asdict
 
@@ -267,17 +269,36 @@ class GPT(nn.Module):
 
     # ---- checkpoint helpers ----
     def save(self, path, **extra):
+        # Atomic: write to a temp file in the same dir, then os.replace (atomic on
+        # POSIX/Windows). A reader/interrupt never sees a half-written checkpoint,
+        # and the previous good file survives a crash mid-save.
+        tmp = f"{path}.tmp"
         torch.save({'model_state': self.state_dict(),
-                    'config': asdict(self.cfg), **extra}, path)
+                    'config': asdict(self.cfg), **extra}, tmp)
+        os.replace(tmp, path)
 
     @classmethod
     def from_checkpoint(cls, ckpt, map_location='cpu'):
         if isinstance(ckpt, str):
-            ckpt = torch.load(ckpt, map_location=map_location, weights_only=False)
+            ckpt = load_checkpoint(ckpt, map_location)
         cfg = GPTConfig(**ckpt['config'])
         model = cls(cfg)
         model.load_state_dict(ckpt['model_state'])
         return model, ckpt
+
+
+def load_checkpoint(path, map_location='cpu'):
+    """torch.load with a friendly error when the file is empty or truncated
+    (e.g. a save was interrupted, or read while still being written)."""
+    if os.path.getsize(path) == 0:
+        raise SystemExit(f"{path} is empty (0 bytes) -- a previous save was "
+                         f"interrupted. Delete it and re-run training to rebuild it.")
+    try:
+        return torch.load(path, map_location=map_location, weights_only=False)
+    except (EOFError, RuntimeError, OSError, _pickle.UnpicklingError) as e:
+        raise SystemExit(f"{path} is corrupt or incomplete ({type(e).__name__}: {e}). "
+                         f"A save was likely interrupted or read mid-write. Delete it "
+                         f"and re-run training, or restore a backup.")
 
 
 def _top_p_filter(logits, top_p):

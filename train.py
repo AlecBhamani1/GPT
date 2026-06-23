@@ -19,7 +19,7 @@ import time
 import numpy as np
 import torch
 
-from model import GPT, PRESETS, pick_device, pick_dtype, amp_ctx
+from model import GPT, PRESETS, pick_device, pick_dtype, amp_ctx, load_checkpoint
 
 # ----------------------- config -----------------------
 CONFIG_NAME = os.environ.get('GPT_CONFIG', 'gpt2')
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     start_iter = 0
     if resume and os.path.exists(out_path):
-        ckpt = torch.load(out_path, map_location=device, weights_only=False)
+        ckpt = load_checkpoint(out_path, map_location=device)
         raw_model.load_state_dict(ckpt['model_state'])   # weights match by name
         start_iter = ckpt.get('iter', 0)
         if 'optimizer_state' in ckpt:
